@@ -18,12 +18,18 @@ public class BacnetService {
 
     private DefaultTransport transport;
     private LocalDevice localDevice;
+    private boolean isInitialized = false;
 
     /**
      * Initializes BACnet communication.
      */
-    public boolean isBacnetRouterConnected(String localBindAddress, int localPort, String broadcastAddress) {
+    public boolean initializeBacnetRouter(String localBindAddress, int localPort, String broadcastAddress) {
         try {
+            if (isInitialized) {
+                System.out.println("BACnet is already initialized.");
+                return true;
+            }
+
             // Create BACnet IP network
             IpNetwork network = new IpNetworkBuilder()
                     .withLocalBindAddress(localBindAddress)
@@ -40,6 +46,7 @@ public class BacnetService {
             localDevice = new LocalDevice(1234, transport);
             localDevice.initialize();
 
+            isInitialized = true;
             System.out.println("BACnet initialized successfully.");
             return true;
 
@@ -53,14 +60,17 @@ public class BacnetService {
     /**
      * Discovers connected BACnet devices.
      */
-    public String getConnectedDevices() {
-        if (localDevice == null) {
-            return "BACnet service is not initialized.";
+    public List<String> getConnectedDevices() {
+        List<String> deviceList = new ArrayList<>();
+
+        if (!isInitialized || localDevice == null) {
+            deviceList.add("BACnet service is not initialized.");
+            return deviceList;
         }
 
         try {
             // Send a Who-Is request globally
-            localDevice.sendGlobalBroadcast(new WhoIsRequest());  //
+            localDevice.sendGlobalBroadcast(new WhoIsRequest());
 
             // Wait for devices to respond
             Thread.sleep(5000);
@@ -69,22 +79,17 @@ public class BacnetService {
             List<RemoteDevice> devices = new ArrayList<>(localDevice.getRemoteDevices());
 
             if (devices.isEmpty()) {
-                return "No BACnet devices found.";
+                deviceList.add("No BACnet devices found.");
+            } else {
+                for (RemoteDevice device : devices) {
+                    deviceList.add("Device ID: " + device.getInstanceNumber() + ", Address: " + device.getAddress());
+                }
             }
-
-            // Format the response
-            StringBuilder response = new StringBuilder("Discovered BACnet Devices:\n");
-            for (RemoteDevice device : devices) {
-                response.append(" Device ID: ").append(device.getInstanceNumber())
-                        .append(", Address: ").append(device.getAddress())
-                        .append("\n");
-            }
-            return response.toString();
-
         } catch (InterruptedException e) {
-            e.printStackTrace();
-            return "Error discovering BACnet devices: " + e.getMessage();
+            deviceList.add("Error discovering BACnet devices: " + e.getMessage());
         }
+
+        return deviceList;
     }
 
     /**
@@ -100,6 +105,7 @@ public class BacnetService {
                 transport.terminate();
                 System.out.println("Transport terminated.");
             }
+            isInitialized = false;
         } catch (Exception e) {
             e.printStackTrace();
             System.err.println("Error during shutdown: " + e.getMessage());

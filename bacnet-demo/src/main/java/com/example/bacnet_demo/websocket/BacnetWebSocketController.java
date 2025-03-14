@@ -6,6 +6,8 @@ import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.SendTo;
 import org.springframework.stereotype.Controller;
 
+import java.util.List;
+
 @Controller
 public class BacnetWebSocketController {
 
@@ -15,13 +17,13 @@ public class BacnetWebSocketController {
     @MessageMapping("/checkRouter")
     @SendTo("/topic/routerStatus")
     public String checkRouter() {
-        boolean isConnected = bacnetService.isBacnetRouterConnected("0.0.0.0", 47808, "192.168.1.255");
+        boolean isConnected = bacnetService.initializeBacnetRouter("0.0.0.0", 47808, "192.168.1.255");
         return isConnected ? "BACnet Router is connected." : "No BACnet Router found.";
     }
 
     @MessageMapping("/getDevices")
     @SendTo("/topic/devices")
-    public String getDevices() {
+    public List<String> getDevices() {
         return bacnetService.getConnectedDevices();
     }
 }
