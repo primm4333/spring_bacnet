@@ -31,20 +31,26 @@ public class BacnetService {
             }
 
             // Create BACnet IP network
+            System.out.println("Creating BACnet IP network...");
             IpNetwork network = new IpNetworkBuilder()
                     .withLocalBindAddress(localBindAddress)
                     .withPort(localPort)
                     .withLocalNetworkNumber(0)
                     .withBroadcast(broadcastAddress, 24)
                     .build();
+            System.out.println("BACnet IP network created successfully.");
 
             // Create BACnet Transport Layer
+            System.out.println("Initializing BACnet transport...");
             transport = new DefaultTransport(network);
             transport.initialize();
+            System.out.println("BACnet transport initialized successfully.");
 
             // Initialize Local Device
+            System.out.println("Initializing LocalDevice...");
             localDevice = new LocalDevice(1234, transport);
             localDevice.initialize();
+            System.out.println("Local device initialized successfully.");
 
             isInitialized = true;
             System.out.println("BACnet initialized successfully.");
@@ -70,7 +76,9 @@ public class BacnetService {
 
         try {
             // Send a Who-Is request globally
+            System.out.println("Sending Who-Is request...");
             localDevice.sendGlobalBroadcast(new WhoIsRequest());
+            System.out.println("Who-Is request sent.");
 
             // Wait for devices to respond
             Thread.sleep(5000);
