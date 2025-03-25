@@ -1,35 +1,39 @@
 package com.example.bacnet_demo.websocket;
 
 import com.example.bacnet_demo.service.BacnetService;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.messaging.handler.annotation.MessageMapping;
-import org.springframework.messaging.handler.annotation.SendTo;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Controller;
-import org.springframework.web.bind.annotation.CrossOrigin;
 
 import java.util.List;
+import java.util.Map;
 
 @Controller
-@CrossOrigin(origins = "http://localhost:5173")
 public class BacnetWebSocketController {
 
-    @Autowired
-    private BacnetService bacnetService;
+    private final SimpMessagingTemplate messagingTemplate;
+    private final BacnetService bacnetService;
 
-    @MessageMapping("/checkRouter")
-    @SendTo("/topic/routerStatus")
-    public String checkRouter() {
-        try {
-            boolean isConnected = bacnetService.initializeBacnetRouter("0.0.0.0", 47808, "192.168.1.255");
-            return isConnected ? "BACnet Router is connected." : "No BACnet Router found.";
-        } catch (Exception e) {
-            return "Error checking router: " + e.getMessage();
-        }
+    public BacnetWebSocketController(SimpMessagingTemplate messagingTemplate, BacnetService bacnetService) {
+        this.messagingTemplate = messagingTemplate;
+        this.bacnetService = bacnetService;
     }
 
-    @MessageMapping("/getDevices")
-    @SendTo("/topic/devices")
-    public List<String> getDevices() {
-        return bacnetService.getConnectedDevices();
+    /**
+     * Sends the connected device names to `/topic/devices` every 5 seconds.
+     */
+    @Scheduled(fixedRate = 5000)
+    public void sendConnectedDevices() {
+        List<String> devices = bacnetService.getConnectedDevices();
+        messagingTemplate.convertAndSend("/topic/devices", devices);
+    }
+
+    /**
+     * Sends device signals to `/topic/signals` every 5 seconds.
+     */
+    @Scheduled(fixedRate = 5000)
+    public void sendDeviceSignals() {
+        Map<String, Integer> signals = bacnetService.getDeviceSignals();
+        messagingTemplate.convertAndSend("/topic/signals", signals);
     }
 }

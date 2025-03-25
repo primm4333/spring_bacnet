@@ -10,113 +10,113 @@ import com.serotonin.bacnet4j.service.unconfirmed.WhoIsRequest;
 import com.serotonin.bacnet4j.transport.DefaultTransport;
 import org.springframework.stereotype.Service;
 
+import jakarta.annotation.PreDestroy;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Random;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @Service
 public class BacnetService {
 
-    private DefaultTransport transport;
-    private LocalDevice localDevice;
-    private boolean isInitialized = false;
+    private AtomicBoolean isInitialized = new AtomicBoolean(false);
+    private final List<String> simulatedDevices = new ArrayList<>();
+    private final Map<String, Integer> deviceSignals = new ConcurrentHashMap<>();
+    private final Random random = new Random();
+    private ScheduledExecutorService scheduler;
 
     /**
-     * Initializes BACnet communication.
+     * Simulates the initialization of a BACnet router.
      */
     public boolean initializeBacnetRouter(String localBindAddress, int localPort, String broadcastAddress) {
-        try {
-            if (isInitialized) {
-                System.out.println("BACnet is already initialized.");
-                return true;
-            }
-
-            // Create BACnet IP network
-            System.out.println("Creating BACnet IP network...");
-            IpNetwork network = new IpNetworkBuilder()
-                    .withLocalBindAddress(localBindAddress)
-                    .withPort(localPort)
-                    .withLocalNetworkNumber(0)
-                    .withBroadcast(broadcastAddress, 24)
-                    .build();
-            System.out.println("BACnet IP network created successfully.");
-
-            // Create BACnet Transport Layer
-            System.out.println("Initializing BACnet transport...");
-            transport = new DefaultTransport(network);
-            transport.initialize();
-            System.out.println("BACnet transport initialized successfully.");
-
-            // Initialize Local Device
-            System.out.println("Initializing LocalDevice...");
-            localDevice = new LocalDevice(1234, transport);
-            localDevice.initialize();
-            System.out.println("Local device initialized successfully.");
-
-            isInitialized = true;
-            System.out.println("BACnet initialized successfully.");
+        if (isInitialized.get()) {
             return true;
-
-        } catch (Exception e) {
-            e.printStackTrace();
-            System.err.println("Error initializing BACnet: " + e.getMessage());
-            return false;
         }
+
+        System.out.println("Simulated BACnet Router initialized at " + localBindAddress + ":" + localPort);
+
+        // Simulate adding IoT devices at home
+        simulatedDevices.add("AC Unit - Living Room");
+        simulatedDevices.add("Smart Light - Bedroom");
+        simulatedDevices.add("Thermostat - Kitchen");
+
+        // Initialize signals for each device
+        for (String device : simulatedDevices) {
+            deviceSignals.put(device, random.nextInt(100)); // Random signal strength
+        }
+
+        // Start continuous signal simulation
+        startContinuousSignalSimulation();
+
+        isInitialized.set(true);
+        return true;
     }
 
     /**
-     * Discovers connected BACnet devices.
+     * Starts continuous signal simulation for each device in separate threads
+     */
+    private void startContinuousSignalSimulation() {
+        scheduler = Executors.newScheduledThreadPool(simulatedDevices.size());
+
+        // Create a separate task for each device
+        for (String device : simulatedDevices) {
+            scheduler.scheduleAtFixedRate(() -> {
+                // Simulate signal updates for this specific device
+                int currentSignal = deviceSignals.get(device);
+                int newSignal = currentSignal + random.nextInt(5) - 2; // Slight variation
+                newSignal = Math.max(0, Math.min(100, newSignal)); // Keep within range 0-100
+
+                deviceSignals.put(device, newSignal);
+                System.out.println("Device: " + device + ", Signal: " + newSignal);
+            }, 0, 2, TimeUnit.SECONDS); // Update every 2 seconds
+        }
+
+        System.out.println("Continuous signal simulation started for " + simulatedDevices.size() + " devices");
+    }
+
+    /**
+     * Simulates fetching connected BACnet devices.
      */
     public List<String> getConnectedDevices() {
-        List<String> deviceList = new ArrayList<>();
-
-        if (!isInitialized || localDevice == null) {
-            deviceList.add("BACnet service is not initialized.");
-            return deviceList;
+        if (!isInitialized.get()) {
+            return List.of("BACnet service is not initialized.");
         }
-
-        try {
-            // Send a Who-Is request globally
-            System.out.println("Sending Who-Is request...");
-            localDevice.sendGlobalBroadcast(new WhoIsRequest());
-            System.out.println("Who-Is request sent.");
-
-            // Wait for devices to respond
-            Thread.sleep(5000);
-
-            // Retrieve discovered BACnet devices
-            List<RemoteDevice> devices = new ArrayList<>(localDevice.getRemoteDevices());
-
-            if (devices.isEmpty()) {
-                deviceList.add("No BACnet devices found.");
-            } else {
-                for (RemoteDevice device : devices) {
-                    deviceList.add("Device ID: " + device.getInstanceNumber() + ", Address: " + device.getAddress());
-                }
-            }
-        } catch (InterruptedException e) {
-            deviceList.add("Error discovering BACnet devices: " + e.getMessage());
-        }
-
-        return deviceList;
+        return new ArrayList<>(simulatedDevices);
     }
 
     /**
-     * Shuts down the BACnet communication and cleans up resources.
+     * Returns the current device signals.
+     * No need to simulate updates here as they're handled by the continuous simulation threads.
      */
-    public void shutdown() {
-        try {
-            if (localDevice != null) {
-                localDevice.terminate();
-                System.out.println("LocalDevice terminated.");
-            }
-            if (transport != null) {
-                transport.terminate();
-                System.out.println("Transport terminated.");
-            }
-            isInitialized = false;
-        } catch (Exception e) {
-            e.printStackTrace();
-            System.err.println("Error during shutdown: " + e.getMessage());
+    public Map<String, Integer> getDeviceSignals() {
+        if (!isInitialized.get()) {
+            return Map.of("Error", -1);
         }
+        return new HashMap<>(deviceSignals);
+    }
+
+    /**
+     * Stop the simulation threads when the service is destroyed
+     */
+    @PreDestroy
+    public void shutdown() {
+        if (scheduler != null) {
+            scheduler.shutdown();
+            try {
+                if (!scheduler.awaitTermination(5, TimeUnit.SECONDS)) {
+                    scheduler.shutdownNow();
+                }
+            } catch (InterruptedException e) {
+                scheduler.shutdownNow();
+                Thread.currentThread().interrupt();
+            }
+        }
+        System.out.println("BACnet simulation stopped");
     }
 }
